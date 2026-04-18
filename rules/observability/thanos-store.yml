@@ -1,0 +1,11 @@
+groups:
+- name: thanos store
+  rules:  
+  - alert: ThanosStoreObjstoreBucketOperationFailure
+    expr: increase(thanos_objstore_bucket_operation_failures_total{job="thanos-store"}[5m]) > 0
+    labels:
+      grouping_label: "{{ $labels.job }}"
+      severity: critical
+    annotations:
+      summary: Thanos Store {{ $labels.instance }} {{$labels.operation}} is experiencing operation failures to objstore.
+      resolved_summary: Thanos Store {{ $labels.instance }} {{$labels.operation}} operations to objstore are stable again.

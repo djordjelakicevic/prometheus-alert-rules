@@ -1,0 +1,83 @@
+groups:
+  - name: containers_usage_alerts
+    rules:
+# Metrics collected via telegraf input plugins
+# Cpu Usage Alert
+    - alert: CPU Usage
+      expr: 100 - last_over_time(cpu_usage_idle{cpu="cpu-total"}[3m]) > 80
+      for: 3m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        severity: critical
+      annotations:
+        summary: "High CPU usage: {{ printf \"%.1f\" $value }}%."
+        resolved_summary: "CPU usage is ok."
+        
+    - alert: RAM Usage Alert
+      expr: (mem_total - (mem_free + mem_buffered + mem_cached)) / mem_total * 100 > 90
+      for: 10s
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        severity: critical
+      annotations:
+        summary: "High RAM usage: {{ printf \"%.1f\" $value }}%."
+        resolved_summary: "RAM usage is ok."
+
+# SWAP Usage Alert
+    - alert: SWAP Usage
+      expr: last_over_time(swap_used_percent[3m]) > 70
+      for: 2m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        severity: critical
+      annotations:
+        summary: "High SWAP usage: {{ printf \"%.1f\" $value }}%."
+        resolved_summary: "SWAP usage is ok."
+        
+# RootFS Usage Alert
+    - alert: Disk Usage
+      expr: last_over_time(disk_used_percent[3m]) > 95
+      for: 3m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        severity: critical
+      annotations:
+        summary: "High disk usage on [{{ $labels.device }}]: {{ printf \"%.2f\" $value }}%."
+        resolved_summary: "Disk usage on [{{ $labels.device }}] is ok."
+        
+# I/O Wait
+    - alert: I/O Wait
+      expr: last_over_time(cpu_usage_iowait{cpu="cpu-total"}[3m]) > 30
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        severity: critical
+      annotations:
+        summary: "High I/O Wait for 5 minutes: {{ printf \"%.2f\" $value }}%."
+        resolved_summary: "I/O wait is ok."
+      
+# File count
+    - alert: File Count
+      expr: last_over_time(filecount_count{directory="/path/"}[3m]) > 0 # set threshold
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: filecount
+        severity: critical
+      annotations:
+        summary: "# of files in {{ $labels.directory }}: {{ $value }}"
+        resolved_summary: "Directory {{ $labels.directory }} is empty."
+
+# Systemd Units
+    - alert: Systemd Service
+      expr: systemd_units_active_code == 2 or 
+            systemd_units_active_code == 3     
+      for: 20s
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        service: "{{ $labels.name }}"
+        type: "systemd_services"
+        severity: critical        
+      annotations:
+        summary: >- 
+         {{ if eq $value 2.0 }}{{ $labels.name }} is inactive.{{ else if eq $value 3.0 }}{{ $labels.name }} has failed.{{ end }}
+        resolved_summary: "{{ $labels.name }} is now active."

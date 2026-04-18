@@ -1,0 +1,22 @@
+groups:
+- name: thanos sidecar
+  rules:   
+  - alert: ThanosSidecarPrometheusDown
+    expr: thanos_sidecar_prometheus_up == 0
+    for: 1m
+    labels:
+      grouping_label: "{{ $labels.job }}"
+      severity: critical
+    annotations:
+      summary: Thanos Sidecar {{$labels.instance}} cannot connect to Prometheus.
+      resolved_summary: Thanos Sidecar {{$labels.instance}} successfully reconnected to Prometheus.
+      
+  - alert: ThanosSidecarBucketOperationsFailed
+    expr: increase(thanos_objstore_bucket_operation_failures_total{job="thanos-sidecar"}[5m]) > 0
+    for: 2m
+    labels:
+      grouping_label: "{{ $labels.job }}"
+      severity: critical
+    annotations:
+      summary: Thanos Sidecar {{$labels.instance}} {{$labels.operation}} bucket operations are failing.
+      resolved_summary: Thanos Sidecar {{$labels.instance}} {{$labels.operation}} bucket operations recovered.

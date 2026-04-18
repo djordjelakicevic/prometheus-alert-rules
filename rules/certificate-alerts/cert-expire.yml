@@ -1,0 +1,27 @@
+groups:
+- name: x509_alerts
+  rules:
+# Metrics collected with telegraf x509 plugin
+    - alert: SSLCertificateExpired
+      expr: min by (common_name, host, source) (min_over_time(x509_cert_expiry[5m])) <= 0
+      for: 2m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: x509_cert
+        severity: critical
+      annotations:
+        summary: "SSL certificate for {{ $labels.common_name }} has expired"
+        description: "The SSL certificate from source:  {{ $labels.source }} on host {{ $labels.host }} has expired!"
+        resolved_summary: "SSL certificate from source: {{ $labels.source }} on host {{ $labels.host }} is no longer expired"
+
+    - alert: SSLCertificateExpiringSoon
+      expr: min_over_time(x509_cert_expiry[3m]) <= 7*24*3600
+      for: 2m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: x509_cert
+        severity: warning
+      annotations:
+        summary: "SSL certificate for {{ $labels.common_name }} expires soon"
+        description: "The SSL certificate from source: {{ $labels.source }} on host {{ $labels.host }} will expire in 7 days."
+        resolved_summary: "SSL certificate from source: {{ $labels.source }} on host {{ $labels.host }} is no longer expiring in 7 days"

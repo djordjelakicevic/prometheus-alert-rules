@@ -1,0 +1,50 @@
+groups:
+- name: thanos compactor
+  rules:
+    - alert: ThanosCompactBlockCleanupFailure
+      expr: increase(thanos_compact_block_cleanup_failures_total{job="thanos-compactor"}[5m]) > 0
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        severity: critical
+      annotations:
+        summary: Thanos Compactor {{ $labels.instance }} is experiencing block cleanup failures.
+        resolved_summary: Thanos Compactor {{ $labels.instance }} cleanup is stable again.
+
+    - alert: ThanosCompactDownsampleFailure
+      expr: increase(thanos_compact_downsample_failures_total{job="thanos-compactor"}[5m]) > 0
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        severity: critical
+      annotations:
+        summary: Thanos Compactor {{ $labels.instance }} is experiencing downsample failures.
+        resolved_summary: Thanos Compactor {{ $labels.instance }} downsample is stable again.
+
+    - alert: ThanosCompactObjstoreBucketOperationFailure
+      expr: increase(thanos_objstore_bucket_operation_failures_total{job="thanos-compactor"}[5m]) > 0
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        severity: critical
+      annotations:
+        summary: Thanos Compactor {{ $labels.instance }} is experiencing operation failures to objstore.
+        resolved_summary: Thanos Compactor {{ $labels.instance }} operations to objstore are stable again.
+
+    - alert: ThanosCompactLoadedBlocksError
+      expr: thanos_blocks_meta_synced{job="thanos-compactor", state=~"failed|corrupted-meta-json"} > 0
+      for: 2m
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        severity: critical
+      annotations:
+        summary: Thanos Compactor {{ $labels.instance }} has loaded bad blocks.
+        resolved_summary: Thanos Compactor {{ $labels.instance }} have no more bad blocks loaded.
+
+    - alert: ThanosCompactHighRamUsage
+      expr: process_resident_memory_bytes{job=~"thanos-compactor"} / 1024 / 1024 /1024 > 20
+      for: 3m
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        severity: critical
+      annotations:
+        summary: Thanos Compactor {{ $labels.instance }} is using a lot of RAM.
+        description: "RAM: {{ printf \"%.2f\" $value }} GB."
+        resolved_summary: Thanos Compactor {{ $labels.instance }} RAM usage stabilized.

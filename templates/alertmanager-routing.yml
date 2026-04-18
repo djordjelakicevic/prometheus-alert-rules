@@ -1,0 +1,138 @@
+global:
+  resolve_timeout: 20s # wait 20s before resolving alert (wait for value to stabilize)
+
+route:
+  group_by: ['grouping_label', 'alertname']	# default group by
+  group_wait: 10s 	# wait 10s before sending received alerts
+  group_interval: 1m	# wait 1m before sending same group of alerts if one more alert arrive
+  repeat_interval: 87600h	# send alerts again for 10 years, alertmanager do not have option to set never
+  receiver: "slack-default"	# default receiver, all this settings in section route can be overriden in routes section
+  routes:
+  - matchers:
+      - type=~"aerospike|chkeeper|ceph|clickhouse|redpanda|postgre|mariadb"
+      - severity="critical"
+      - env="dev"
+    receiver: "slack-alerts-critical-dev"
+
+  - matchers:
+      - type=~"aerospike|chkeeper|ceph|clickhouse|redpanda|postgre|mariadb"
+      - severity="critical"
+    receiver: "slack-alerts-critical"
+
+  - matchers:
+      - type="pagerduty"
+    receiver: "pagerduty"
+    group_by: ['type']
+
+  - matchers:
+      - deadman="containers"
+    group_by: ['alertname', 'grouping_label']
+    receiver: "slack-down"
+
+  - matchers:
+      - type="prometheus-alert"
+    group_by: ['grouping_label', 'alertname', 'instance']
+
+  - matchers:
+      - type="smartctl"
+    group_by: ['alertname', 'grouping_label', 'disk_name', 'severity']
+
+  - matchers:
+      - type="netstat"
+    group_by: ['alertname', 'grouping_label', 'severity']
+
+  - matchers:
+      - type="systemd-services"
+    group_by: ['alertname', 'grouping_label', 'service']
+
+receivers:
+  - name: 'slack-default'
+    slack_configs:
+      - api_url: "SLACK_WEBHOOK_DEFAULT"
+        channel: "CHANNEL_NAME"
+        send_resolved: true
+        username: "Alertmanager"
+        fallback: '{{ template "slack.fallback" . }}'
+        title_link: ''
+        icon_url: "https://avatars.githubusercontent.com/u/3380462?s=200&v=4"
+        title: '{{ template "slack.title" . }}'
+        color: '{{ template "slack.color" .}}'
+        text: '{{ template "slack.text" . }}'
+
+# Same slack for down targets
+  - name: 'slack-down'
+    slack_configs:
+      - api_url: "SLACK_WEBHOOK_DEFAULT"
+        channel: "CHANNEL_NAME"
+        send_resolved: true
+        username: "Alertmanager"
+        fallback: '{{ template "slack-no.fallback" . }}'
+        title_link: ''
+        icon_url: "https://avatars.githubusercontent.com/u/3380462?s=200&v=4"
+        title: '{{ template "slack-no.title" . }}'
+        text: '{{ template "slack-no.text" . }}'
+        color: '{{ template "slack-no.color" . }}'
+
+  - name: 'slack-alerts-warning'
+    slack_configs:
+      - api_url: "SLACK_WEBHOOK_WARNING"
+        channel: "alerts-warning"
+        send_resolved: true
+        username: "Alertmanager"
+        fallback: '{{ template "slack.fallback" . }}'
+        title_link: ''
+        icon_url: "https://avatars.githubusercontent.com/u/3380462?s=200&v=4"
+        title: '{{ template "slack.title" . }}'
+        color: '{{ template "slack.color" .}}'
+        text: '{{ template "slack.text" . }}'
+
+  - name: 'slack-alerts-critical'
+    slack_configs:
+      - api_url: "SLACK_WEBHOOK_CRITICAL"
+        channel: "CHANNEL_NAME"
+        send_resolved: true
+        username: "Alertmanager"
+        fallback: '{{ template "slack.fallback" . }}'
+        title_link: ''
+        icon_url: "https://avatars.githubusercontent.com/u/3380462?s=200&v=4"
+        title: '{{ template "slack.title" . }}'
+        color: '{{ template "slack.color" .}}'
+        text: '{{ template "slack.text" . }}'
+
+  - name: 'slack-alerts-critical-dev'
+    slack_configs:
+      - api_url: "SLACK_WEBHOOK_CRITICAL_DEV"
+        channel: "CHANNEL_NAME"
+        send_resolved: true
+        username: "Alertmanager"
+        fallback: '{{ template "slack.fallback" . }}'
+        title_link: ''
+        icon_url: "https://avatars.githubusercontent.com/u/3380462?s=200&v=4"
+        title: '{{ template "slack.title" . }}'
+        color: '{{ template "slack.color" .}}'
+        text: '{{ template "slack.text" . }}'
+
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - url: "https://events.pagerduty.com/v2/enqueue"
+        send_resolved: true
+        routing_key: PAGERDUTY_ROUTING_KEY
+        description: '{{ .CommonLabels.alertname }} - {{ .CommonLabels.job }}: {{ range .Alerts.Firing }}{{ .Annotations.summary }}   | {{ end }}'
+        details:
+          instance: '{{ .CommonLabels.instance }}'
+          summary: '{{ .CommonAnnotations.summary }}'
+
+inhibit_rules:	# used to mute same alert with lower severity
+  - source_matchers:
+      - alertname="Efficiency Alert Critical"
+    target_matchers:
+      - alertname="Efficiency Alert Warning"
+    equal: ['instance']
+
+  - source_matchers:
+      - alertname="SSLCertificateExpired"
+    target_matchers:
+      - alertname="SSLCertificateExpiringSoon"
+    equal: ['source', 'common_name', 'host']
+
+

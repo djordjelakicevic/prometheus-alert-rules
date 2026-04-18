@@ -1,0 +1,156 @@
+groups:
+  - name: zk-alerts
+    rules:
+
+    - alert: ZooKeeper server is down
+      expr: up{job=~"zookeeper-dev|zookeeper-prod"} == 0
+      for: 1m
+      labels:
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+        severity: critical
+      annotations:
+        summary: "Instance {{ $labels.instance }} of job {{ $labels.job }} is down"
+        resolved_summary: "Instance is up."
+        dashboard: "grafana_dashboard_url"
+        
+    - alert: Zookeeper create too many znodes
+      expr: znode_count > 1000000
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} create too many znodes"
+        description: '{{ $labels.instance }} of job {{$labels.job}} create too many znodes: [{{ printf "%.0f" $value }}].'
+        resolved_summary: "Znode count is normal."
+
+    - alert: Zookeeper create too many connections
+      expr: num_alive_connections > 1800 #  maxClientCnxns: 2000
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} create too many connections"
+        description: '{{ $labels.instance }} of job {{$labels.job}} create too many connections: [{{ printf "%.0f" $value }}].'
+        resolved_summary: "Connection count is normal."
+
+    - alert: Zookeeper znode total occupied memory is too big
+      expr: approximate_data_size /1024 /1024 > 1 * 1024 # more than 1024 MB(1 GB)
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} znode total occupied memory is too big"
+        description: '{{ $labels.instance }} of job {{$labels.job}} znode total occupied memory is too big: [{{ printf "%.0f" $value }}] MB.'
+        resolved_summary: "Memory usage is normal."
+
+    - alert: Zookeeper set too many watch
+      expr: watch_count > 10000
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} set too many watch"
+        description: '{{ $labels.instance }} of job {{$labels.job}} set too many watch: [{{ printf "%.0f" $value }}].'
+        resolved_summary: "Watch count is normal."
+
+    - alert: Zookeeper leader election happens
+      expr: increase(election_time_count[5m]) > 0
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} a leader election happens"
+        resolved_summary: "Leader election ended."
+
+    - alert: Zookeeper open too many files
+      expr: open_file_descriptor_count > 300
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} open too many files"
+        description: '{{ $labels.instance }} of job {{$labels.job}} open too many files: [{{ printf "%.0f" $value }}].'
+        resolved_summary: "File count is ok."
+
+    - alert: Zookeeper fsync time is too long
+      expr: rate(fsynctime_sum[1m]) > 1000
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: '{{ $labels.instance }} of job {{$labels.job}} fsync time is too long: [{{ printf "%.0f" $value }}]ms.'
+        resolved_summary: "fsync time is ok."
+
+    - alert: Zookeeper take snapshot time is too long
+      expr: rate(snapshottime_sum[5m]) > 100
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} take snapshot time is too long"
+        description: '{{ $labels.instance }} of job {{$labels.job}} take snapshot time is too long: [{{ printf "%.0f" $value }}]ms.'
+        resolved_summary: "Snapshot time is normal."
+
+    - alert: Zookeeper avg latency is too high
+      expr: avg_latency > 50
+      for: 20s
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} avg latency is too high"
+        description: '{{ $labels.instance }} of job {{$labels.job}} avg latency is too high: [{{ printf "%.0f" $value }}]ms.'
+        resolved_summary: "Latency is normal."
+
+    - alert: Zookeeper too many outstanding requests
+      expr: outstanding_requests > 50
+      for: 1m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "Instance {{ $labels.instance }} have too many outstanding_requests."
+        description: '{{ $labels.instance }} of job {{$labels.job}} have too many outstanding_requests.\nValue [{{ printf "%.0f" $value }}].'
+        resolved_summary: "Outstanding requests are back to normal."
+
+    - alert: Zookeeper unrecoverable errors
+      expr: increase(unrecoverable_error_count[1m]) > 0
+      for: 0m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: 'There are unrecoverable errors on {{ $labels.instance }}. Value: [{{ printf "%.0f" $value }}]'
+        resolved_summary: "Unrecoverable errors has stopped growing."
+
+    - alert: ZooKeeper JvmMemoryFillingUp
+      expr: jvm_memory_bytes_used / jvm_memory_bytes_max{area="heap"} > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        grouping_label: '{{ $labels.instance }}'
+        type: zookeeper
+      annotations:
+        summary: "JVM memory filling up (instance {{ $labels.instance }})"
+        description: 'JVM memory is filling up (> 80%)\n labels: {{ $labels }}  value = {{ printf "%.0f" $value }}'
+        resolved_summary: "JVM memory is normal."

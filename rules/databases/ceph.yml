@@ -1,0 +1,188 @@
+groups:
+  - name: 'ceph_alerts'
+    rules:
+
+      - alert: CephNodeDown
+        expr: up{job="ceph"} == 0
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Ceph is down."
+          resolved_summary: "Ceph is up."
+          dashboard: "grafana_dashboard_url"
+
+      # Health Alerts 
+      # Alert when cluster health is in ERROR state
+      # This indicates a critical issue requiring immediate action
+      - alert: CephClusterHealthError
+        expr: ceph_health_status == 2
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Ceph cluster health is in ERROR state"
+          resolved_summary: "Ceph cluster health is no more in ERROR state."
+
+      # Alert when cluster health is in WARNING state
+      - alert: CephClusterHealthWarning
+        expr: ceph_health_status == 1
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: ceph
+        annotations:
+          summary: "Ceph cluster health is in WARNING state"
+          resolved_summary: "Ceph cluster health is no more in WARNING state."
+
+      # Alert when OSDs are down
+      # OSD failures reduce redundancy and can cause data unavailability 
+      - alert: CephOSDDown
+        expr: ceph_osd_up == 0
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.ceph_daemon }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Ceph OSD {{ $labels.ceph_daemon }} is down"
+          description: |
+            OSD {{ $labels.ceph_daemon }} has been down for more than 1 minute.
+            Data redundancy may be compromised.
+            Check OSD status: ceph osd tree | grep {{ $labels.ceph_daemon }}
+
+      # Alert when multiple OSDs are down simultaneously
+      # Multiple failures indicate a systemic issue
+      - alert: CephMultipleOSDsDown
+        expr: count(ceph_osd_up == 0) > 1
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Multiple Ceph OSDs are down"
+          description: |
+            {{ $value }} OSDs are currently down on cluster {{ $labels.cluster }}.
+            This may indicate a host failure, network issue, or power problem.
+            Immediate investigation required.
+
+      # Alert when cluster capacity exceeds 90%
+      # This is a critical threshold requiring immediate action
+      - alert: CephClusterCriticallyFull
+        expr: |
+          (ceph_cluster_total_used_bytes / ceph_cluster_total_bytes) * 100 > 75
+        for: 30s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Ceph cluster capacity above 90%"
+          description: |
+            Cluster {{ $labels.cluster }} is {{ printf "%.1f" $value }}% full.
+            Writes may be blocked soon. Emergency capacity action required.
+            Add OSDs immediately or enable full ratio bypass.
+
+      # Performance
+      - alert: CephOSDHighLatency
+        expr: ceph_osd_apply_latency_ms > 100
+        for: 5m
+        labels:
+          grouping_label: "{{ $labels.ceph_daemon }}"
+          severity: warning
+          type: ceph
+        annotations:
+          summary: "High latency on Ceph OSD {{ $labels.ceph_daemon }}"
+          description: |
+            OSD {{ $labels.ceph_daemon }} apply latency is {{ printf "%.0f" $value }}ms.
+          resolved_summary: "Apply latency is back to normal."
+
+      # Alert on degraded PGs
+      # Degraded PGs have reduced redundancy
+      - alert: CephPGsDegraded
+        expr: ceph_pg_degraded > 0
+        for: 2m
+        labels:
+          grouping_label: "Pool id: {{ $labels.pool_id }}"
+          severity: warning
+          type: ceph
+        annotations:
+          summary: "Ceph cluster has degraded placement groups"
+          description: |
+            {{ $value }} placement groups are degraded. Pool: {{ $labels.pool_id }}
+            Data redundancy is reduced until recovery completes.
+            Check PG status: ceph pg stat
+          resolved_summary: "PG is no more in degraded state."
+
+      # Alert on inactive PGs
+      # Inactive PGs cannot serve I/O
+      - alert: CephPGsInactive
+        expr: ceph_pg_total - ceph_pg_active > 0
+        for: 1m
+        labels:
+          grouping_label: "Pool id: {{ $labels.pool_id }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Ceph cluster has inactive placement groups"
+          description: |
+            Some placement groups are inactive. Pool: {{ $labels.pool_id }}
+            I/O to affected pools will fail or hang.
+            List affected PGs: ceph pg ls inactive
+          resolved_summary: "PG is active again."
+
+      - alert: CephMonQuorumAtRisk
+        expr: count(ceph_mon_quorum_status == 1) < 2
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Ceph MON quorum at risk"
+          description: |
+            Only {{ printf "%.0f" $value }} MON(s) are in quorum on {{ $labels.instance }}.
+            Quorum requires majority of MONs. Cluster may become read-only.
+            Check MON status: ceph mon stat
+          resolved_summary: "Ceph MON quorum is ok."
+
+      - alert: CephMonDown
+        expr: ceph_mon_quorum_status == 0
+        for: 30s
+        labels:
+          grouping_label: "{{ $labels.ceph_daemon }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "Ceph Monitor out of quorum {{ $labels.ceph_daemon }}"
+          description: "Monitor {{ $labels.ceph_daemon }} is not in quorum."
+          resolved_summary: "Monitor is back in quorum"
+
+      - alert: CephMgrDown
+        expr: count(ceph_mgr_status == 0) == 3
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: ceph
+        annotations:
+          summary: "There is no active Ceph Managers."
+          resolved_summary: "There is again one active Ceph Manager."
+      
+      - alert: CephMgrFailover
+        expr: ceph_mgr_status == 1 and changes(ceph_mgr_status[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          grouping_label: '{{ $labels.ceph_daemon }}'
+          type: ceph
+        annotations:
+          summary: "New active Ceph MGR: {{ $labels.ceph_daemon }}"
+          description: "MGR {{ $labels.ceph_daemon }} became active. Previous active MGR failed over."
+          resolved_summary: "MGR is stable."

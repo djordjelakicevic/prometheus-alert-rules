@@ -1,0 +1,172 @@
+groups:
+  - name: 'redpanda_alerts'
+    rules:
+
+      - alert: RedPandaDown
+        expr: up{job=~"redpanda-dev|redpanda-prod"} == 0
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: redpanda
+        annotations:
+          summary: "RedPanda node {{ $labels.instance }} of job {{ $labels.job }} is down."
+          resolved_summary: "RedPanda node {{ $labels.instance }} is up."
+          dashboard: "grafana_dashboard_url"
+
+      # Under-replicated partitions
+      - alert: RedPandaUnderReplicatedPartitions
+        expr: redpanda_kafka_under_replicated_replicas > 0
+        for: 1m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "Under-replicated partitions detected"
+          description: |
+            RedPanda has [{{ printf "%.0f" $value }}] under-replicated partitions on {{ $labels.instance }} in {{ $labels.job }} job. 
+            Data may be at risk.
+            Partition: [{{ $labels.redpanda_partition }}]
+          resolved_summary: "All partitions are fully replicated."
+
+      # Leaderless partitions
+      - alert: RedpandaUnavailablePartitions
+        expr: redpanda_cluster_unavailable_partitions > 0
+        for: 1m
+        labels:
+          severity: critical
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "Partitions without leader detected"
+          description: 'Redpanda has [{{ printf "%.0f" $value }}] partitions without a leader. These partitions cannot serve read/write requests.'
+          resolved_summary: "All partitions have leaders"
+
+      # Frequent leadership changes
+      - alert: RedpandaFrequentLeadershipChanges
+        expr: sum(increase(redpanda_raft_leadership_changes[1m])) by (job, env) > 0
+        for: 30s
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.job }}'
+          type: redpanda
+        annotations:
+          summary: "Leadership changes detected"
+          description: |
+            Redpanda cluster is experiencing leadership changes in past 1 minute. 
+            This indicates cluster instability.
+          resolved_summary: "Leadership is stable."
+
+      # Node status RPC timeouts
+      - alert: RedpandaNodeStatusRPCTimeouts
+        expr: increase(redpanda_node_status_rpcs_timed_out[2m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "Node status RPC timeouts on {{ $labels.instance }}"
+          description: "Redpanda node {{ $labels.instance }} is experiencing RPC timeouts, indicating potential network or peer unresponsiveness."
+          resolved_summary: "RPC communication is healthy"
+
+      # Disk usage
+      - alert: RedpandaDiskUsageHigh
+        expr: (1 - (redpanda_storage_disk_free_bytes / redpanda_storage_disk_total_bytes)) * 100 > 75
+        for: 1m
+        labels:
+          severity: critical
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "Low disk space on Redpanda node {{ $labels.instance }}"
+          description: 'Disk has less then 25% free space on {{ $labels.instance }}. Value: {{ printf "%.0f" $value }}'
+          resolved_summary: "Disk space is sufficient."
+
+      # RPC request latency
+      - alert: RedpandaHighRPCLatency
+        expr: histogram_quantile(0.99, rate(redpanda_rpc_request_latency_seconds_bucket{redpanda_server="internal"}[5m])) * 1000 > 20
+        for: 5m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }} - {{ $labels.redpanda_server }}'
+          type: redpanda
+        annotations:
+          summary: "High internal RPC latency on {{ $labels.instance }} for 5 minutes."
+          description: 'P99 internal RPC request latency is [{{ printf "%.1f" $value }}]ms on {{ $labels.instance }}.'
+          resolved_summary: "Internal RPC latency is normal"
+
+      - alert: RedpandaDiskDegraded
+        expr: redpanda_storage_disk_free_space_alert == 2
+        for: 1m
+        labels:
+          severity: critical
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "Disk degraded on {{ $labels.instance }}"
+          description: "Redpanda has triggered a disk degraded alert on {{ $labels.instance }}."
+          resolved_summary: "Disk is ok."
+
+      - alert: RedpandaHighProducerLatencyAverage
+        expr: histogram_quantile(0.50, rate(redpanda_kafka_request_latency_seconds_bucket{redpanda_request="produce"}[5m])) * 1000 > 15
+        for: 5m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "High avg producer latency on {{ $labels.instance }}"
+          description: 'P50 producer latency is [{{ printf "%.1f" $value }}]ms on {{ $labels.instance }}.'
+          resolved_summary: "Producer latency is normal"
+
+      - alert: RedpandaHighConsumerLatency
+        expr: histogram_quantile(0.99, rate(redpanda_kafka_request_latency_seconds_bucket{redpanda_request="consume"}[5m])) * 1000 > 5
+        for: 5m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "High consumer latency on {{ $labels.instance }}"
+          description: 'P99 consumer latency is [{{ printf "%.1f" $value }}]ms on {{ $labels.instance }}.'
+          resolved_summary: "Consumer latency is normal"
+
+      - alert: RedpandaHighConsumerLatencyAverage
+        expr: histogram_quantile(0.50, rate(redpanda_kafka_request_latency_seconds_bucket{redpanda_request="consume"}[5m])) * 1000 > 5
+        for: 2m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "High avg latency consumer latency on {{ $labels.instance }}"
+          description: 'P50 consumer latency is [{{ printf "%.1f" $value }}]ms on {{ $labels.instance }}.'
+          resolved_summary: "Consumer latency is normal"
+
+      - alert: RedpandaHighActiveConnections
+        expr: redpanda_rpc_active_connections{redpanda_server="kafka"} > 100
+        for: 5m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }}'
+          type: redpanda
+        annotations:
+          summary: "High number of active connections on {{ $labels.instance }}"
+          description: 'Redpanda has [{{ printf "%.0f" $value }}] active Kafka connections on {{ $labels.instance }}.'
+          resolved_summary: "Connection count is normal"
+
+      - alert: RedpandaSchemaRegistryErrors
+        expr: rate(redpanda_schema_registry_request_errors_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: warning
+          grouping_label: '{{ $labels.instance }} - Code: {{ $labels.redpanda_status }}'
+          type: redpanda
+        annotations:
+          summary: "Schema Registry errors on {{ $labels.instance }}"
+          description: |
+            Schema Registry is experiencing errors at rate [{{ printf "%.2f" $value }}] per second on {{ $labels.instance }}.
+          resolved_summary: "Schema Registry is healthy"
+    

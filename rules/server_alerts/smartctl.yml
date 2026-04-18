@@ -1,0 +1,24 @@
+groups:
+  - name: smartctl alerts
+    rules:  
+    - alert: Uncorrectable Errors
+      expr: last_over_time(smart_device_uncorrectable_errors[3m]) != 0
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: smartctl
+        disk_name: "{{ $labels.device }}"
+        severity: critical
+      annotations:
+        summary: "Uncorrectable errors on [{{ $labels.device }}]: {{ $value }}"
+        resolved_summary: "There is no more uncorrectable errors on [{{ $labels.device }}]."
+        
+    - alert: Bad Sectors
+      expr: last_over_time(smart_device_uncorrectable_sector_count[3m]) != 0
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: smartctl
+        disk_name: "{{ $labels.device }}"
+        severity: critical
+      annotations:
+        summary: "Bad sectors on [{{ $labels.device }}]: {{ $value }}"
+        resolved_summary: "There is no more bad sectors on [{{ $labels.device }}]."

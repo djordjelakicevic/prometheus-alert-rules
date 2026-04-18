@@ -1,0 +1,220 @@
+groups:
+  - name: 'clickhouse_alerts'
+    rules:
+
+    - alert: ClickhouseServerDown
+      expr:  up{job=~"clickhouse-dev|clickhouse-prod"} == 0
+      for: 1m
+      labels:
+        grouping_label: '{{ $labels.instance }}'
+        type: clickhouse
+        severity: critical
+      annotations:
+        summary: "Instance {{ $labels.instance }} of job {{ $labels.job }} is down"
+        resolved_summary: "Instance is up."
+        dashboard: "grafana_dashboard_url"
+
+    - alert: ClickhouseDiskSpaceCriticalOnDefault
+      expr: ClickHouseAsyncMetrics_DiskAvailable_default / (ClickHouseAsyncMetrics_DiskAvailable_default + ClickHouseAsyncMetrics_DiskUsed_default) * 100 < 35
+      for: 10s
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: critical
+        type: clickhouse
+      annotations:
+        summary: ClickHouse Disk Space Critical on Default (instance {{ $labels.instance }})
+        description: 'Available disk space on default disk is critically low, below 35%.\n  Value = {{ printf "%.0f" $value }}%'
+        resolved_summary: "Disk space on default is ok."
+
+    - alert: ClickhouseDiskSpaceLowOnDefault
+      expr: ClickHouseAsyncMetrics_DiskAvailable_default / (ClickHouseAsyncMetrics_DiskAvailable_default + ClickHouseAsyncMetrics_DiskUsed_default) * 100 < 40
+      for: 2m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse Disk Space Low on Default (instance {{ $labels.instance }})
+        description: 'Available disk space on default is below 40%.\n  Value = {{ printf "%.0f" $value }}%'
+        resolved_summary: "Disk space on default is ok."
+
+    - alert: ClickhouseDiskSpaceLowOnBackups
+      expr: ClickHouseAsyncMetrics_DiskAvailable_backups / (ClickHouseAsyncMetrics_DiskAvailable_backups + ClickHouseAsyncMetrics_DiskUsed_backups) * 100 < 20
+      for: 2m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse Disk Space Low on Backups (instance {{ $labels.instance }})
+        description: 'Disk space on backups is below 20%.\n  Value = {{ printf "%.0f" $value }}%'
+        resolved_summary: "Disk space on backups is ok."
+
+    - alert: ClickhouseReplicaErrors
+      expr: increase(ClickHouseErrorMetric_ALL_REPLICAS_ARE_STALE[1m]) > 1 or increase(ClickHouseErrorMetric_ALL_REPLICAS_LOST[1m]) > 0
+      for: 30s
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: critical
+        type: clickhouse
+      annotations:
+        summary: ClickHouse Replica Errors (instance {{ $labels.instance }})
+        description: "Critical replica errors detected, either all replicas are stale or lost."
+        resolved_summary: "There are no more replica errors."
+
+    - alert: ClickhouseNoAvailableReplicas
+      expr: increase(ClickHouseErrorMetric_NO_AVAILABLE_REPLICA[1m]) > 0
+      for: 30s
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: critical
+        type: clickhouse
+      annotations:
+        summary: ClickHouse No Available Replicas (instance {{ $labels.instance }})
+        description: 'No available replicas in ClickHouse.\n  Value = {{ printf "%.0f" $value }}'
+        resolved_summary: "State is back to normal."
+
+    - alert: ClickhouseNoLiveReplicas
+      expr: increase(ClickHouseErrorMetric_TOO_FEW_LIVE_REPLICAS[1m]) > 0
+      for: 30s
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: critical
+        type: clickhouse
+      annotations:
+        summary: ClickHouse No Live Replicas (instance {{ $labels.instance }})
+        description: "There are too few live replicas available at the momment, risking data loss and service disruption."
+        resolved_summary: "State is back to normal."
+
+    # Please replace the threshold with an appropriate value
+    - alert: ClickhouseHighNetworkTraffic
+      expr: ClickHouseMetrics_NetworkSend > 250 or ClickHouseMetrics_NetworkReceive > 250
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse High Network Traffic (instance {{ $labels.instance }})
+        description: 'Network traffic is unusually high, may affect cluster performance.\n  Value = {{ printf "%.0f" $value }}'
+        resolved_summary: "Network traffic is back to normal."
+
+    # Please replace the threshold with an appropriate value
+    - alert: ClickhouseHighTcpConnections
+      expr: ClickHouseMetrics_TCPConnection > 400
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse High TCP Connections (instance {{ $labels.instance }})
+        description: 'High number of TCP connections, indicating heavy client or inter-cluster communication.\n  Value = {{ printf "%.0f" $value }}'
+        resolved_summary: "TCP connections are back to normal."
+
+    - alert: ClickhouseInterserverConnectionIssues
+      expr: ClickHouseMetrics_InterserverConnection > 50
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse Interserver Connection Issues (instance {{ $labels.instance }})
+        description: "An increase in interserver connections may indicate replication or distributed query handling issues."
+        resolved_summary: "Interserver connections are back to normal."
+
+    - alert: ClickhouseZookeeperConnectionIssues
+      expr: ClickHouseMetrics_ZooKeeperSession != 1
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse ZooKeeper Connection Issues (instance {{ $labels.instance }})
+        description: "ClickHouse is experiencing issues with ZooKeeper connections, which may affect cluster state and coordination."
+        resolved_summary: "Connections with ZooKeeper are stable."
+
+    - alert: ClickhouseAuthenticationFailures
+      expr: increase(ClickHouseErrorMetric_AUTHENTICATION_FAILED[5m]) > 0
+      for: 0m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: info
+        type: clickhouse
+      annotations:
+        summary: ClickHouse Authentication Failures (instance {{ $labels.instance }})
+        description: "Authentication failures detected, indicating potential security issues or misconfiguration."
+
+    - alert: ClickhouseAccessDeniedErrors
+      expr: increase(ClickHouseErrorMetric_RESOURCE_ACCESS_DENIED[5m]) > 0
+      for: 0m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: info
+        type: clickhouse
+      annotations:
+        summary: ClickHouse Access Denied Errors (instance {{ $labels.instance }})
+        description: "Access denied errors have been logged, which could indicate permission issues or unauthorized access attempts."
+
+    - alert: ClickhouseRejectedInsertQueries
+      expr: increase(ClickHouseProfileEvents_RejectedInserts[2m]) > 0
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse rejected insert queries (instance {{ $labels.instance }})
+        description: 'INSERTs rejected due to too many active data parts. Reduce insert frequency.\n  Value = {{ printf "%.0f" $value }}'
+        resolved_summary: "There are no more Rejected Insert Queries."
+
+    - alert: ClickhouseDelayedInsertQueries
+      expr: increase(ClickHouseProfileEvents_DelayedInserts[2m]) > 0
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse delayed insert queries (instance {{ $labels.instance }})
+        description: 'INSERTs delayed due to high number of active parts.\n  Value = {{ printf "%.0f" $value }}'
+        resolved_summary: "There are no more Delayed Insert Queries."
+
+    - alert: ClickhouseZookeeperHardwareException
+      expr: increase(ClickHouseProfileEvents_ZooKeeperHardwareExceptions[2m]) > 0
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: critical
+        type: clickhouse
+      annotations:
+        summary: ClickHouse zookeeper hardware exception (instance {{ $labels.instance }})
+        description: 'Zookeeper hardware exception: network issues communicating with ZooKeeper. Exception count: {{ printf "%.0f" $value }}'
+        resolved_summary: "Communication with ZooKeeper is stable again."
+
+    # Please replace the threshold with an appropriate value
+    - alert: ClickhouseHighNetworkUsage
+      expr: rate(ClickHouseProfileEvents_NetworkSendBytes[2m]) / 1024 / 1024 > 250 or rate(ClickHouseProfileEvents_NetworkReceiveBytes[2m]) / 1024 / 1024 > 250
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: warning
+        type: clickhouse
+      annotations:
+        summary: ClickHouse high network usage (instance {{ $labels.instance }})
+        description: 'High network usage. ClickHouse network usage exceeds 100MB/s. Value = {{ printf "%.0f" $value }} MBs'
+        resolved_summary: "Network usage is back to normal."
+
+    - alert: ClickhouseDistributedRejectedInserts
+      expr: increase(ClickHouseProfileEvents_DistributedRejectedInserts[2m]) > 0
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.instance }}"
+        severity: critical
+        type: clickhouse
+      annotations:
+        summary: ClickHouse distributed rejected inserts (instance {{ $labels.instance }})
+        description: 'INSERTs into Distributed tables rejected due to pending bytes limit.\n  Value: {{ printf "%.0f" $value }}'
+        resolved_summary: "There are no more Distributed Rejected Inserts."

@@ -1,0 +1,76 @@
+groups: 
+  - name: prometheus
+    rules:
+    
+# Target Down
+    - alert: Target Status
+      expr: up == 0
+      for: 2m
+      keep_firing_for: 30s
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        deadman: containers
+        severity: critical
+      annotations:
+        summary: "{{ $labels.instance }} is down."
+        resolved_summary: "{{ $labels.instance }} is up."
+
+# TSDB Size    
+    - alert: Database Size
+      expr: last_over_time(prometheus_tsdb_storage_blocks_bytes[3m]) / 1024 / 1024 / 1024 > 70
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        type: "prometheus-alert"
+        severity: critical
+      annotations:
+        summary: "Big db size on {{ $labels.instance }}: {{ printf \"%.2f\" $value }} GB."
+        resolved_summary: "DB size is now ok on {{ $labels.instance }}."      
+        
+# Scrape Duration
+    - alert: Scrape Duration
+      expr: last_over_time(scrape_duration_seconds[3m]) > 9
+      for: 3m
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        type: "prometheus-alert"
+        severity: critical
+      annotations:
+        summary: "Scrape duration on {{ $labels.instance }} is too long for 3 minutes: {{ printf \"%.3f\" $value }} s"
+        resolved_summary: "Scrape duration on {{ $labels.instance }} is ok."
+
+# HTTP Resposne Size
+    - alert: HTTP Response Size
+      expr: |
+        rate(prometheus_http_response_size_bytes_sum[5m]) /
+        rate(prometheus_http_response_size_bytes_count[5m]) / 1024 / 1024 > 1
+      for: 20s
+      keep_firing_for: 20s
+      labels:
+        grouping_label: "{{ $labels.job }} : {{ $labels.handler}}"
+        type: "prometheus-alert"
+        severity: critical
+      annotations:
+        summary: "HTTP Response Size {{ $labels.instance }}: {{ printf \"%.2f\" $value }} MB."
+        resolved_summary: "HTTP Response Size is now ok on {{ $labels.instance }}."
+
+    - alert: Alert Errors
+      expr: sum by (instance,job) (increase(prometheus_notifications_errors_total[1m])) > 0
+      for: 10s
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        type: "prometheus-alert"
+        severity: critical
+      annotations:
+        summary: "Prometheus {{ $labels.instance }} is encountering alert errors."
+        resolved_summary: "Prometheus {{ $labels.instance }} have no more alert errors."
+
+    - alert: Alerts Dropped
+      expr: increase(prometheus_notifications_dropped_total[5m]) > 0
+      keep_firing_for: 20s
+      labels:
+        grouping_label: "{{ $labels.job }}"
+        type: "prometheus-alert"
+        severity: critical
+      annotations:
+        summary: "Prometheus {{ $labels.instance }} is dropping alerts."
+        resolved_summary: "Prometheus {{ $labels.instance }} alerts stabilized."

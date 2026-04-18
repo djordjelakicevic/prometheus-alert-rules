@@ -1,0 +1,81 @@
+groups:
+  - name: net_alerts
+    rules:
+# Connection Status Alerts
+    - alert: Connection Status
+      expr: last_over_time(net_response_result_code[3m]) == 2
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        severity: critical
+      annotations:
+        summary: "{{ $labels.grouping_label }} {{ $labels.server}}:{{ $labels.port}} - Connection Status: failed."
+        resolved_summary: "{{ $labels.grouping_label }} {{ $labels.server}}:{{ $labels.port}} - Connection Status: success."
+
+# Netstat Alerts
+    - alert: tcp_syn_sent critical
+      expr: last_over_time(netstat_tcp_syn_sent[3m]) > 2000
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: netstat
+        severity: critical
+      annotations:
+        summary: "Number of connections: {{ $value }}."
+        resolved_summary: "Status ok."   
+        
+    - alert: tcp_syn_sent warning
+      expr: last_over_time(netstat_tcp_syn_sent[3m]) > 100
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: netstat
+        severity: warning
+      annotations:
+        summary: "Number of connections: {{ $value }}."
+        resolved_summary: "Status ok."
+
+    - alert: tcp_fin_wait1 critical
+      expr: last_over_time(netstat_tcp_fin_wait1[3m]) > 2000
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: netstat
+        severity: critical
+      annotations:
+        summary: "Number of connections: {{ $value }}."
+        resolved_summary: "Status ok."
+     
+    - alert: tcp_fin_wait1 warning
+      expr: last_over_time(netstat_tcp_fin_wait1[3m]) > 100
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: netstat
+        severity: warning
+      annotations:
+        summary: "Number of connections: {{ $value }}."
+        resolved_summary: "Status ok."   
+        
+    - alert: tcp_fin_wait2 critical
+      expr: last_over_time(netstat_tcp_fin_wait2[3m]) > 2000
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: netstat
+        severity: critical
+      annotations:
+        summary: "Number of connections: {{ $value }}."
+        resolved_summary: "Status ok."     
+        
+    - alert: tcp_fin_wait2 warning
+      expr: last_over_time(netstat_tcp_fin_wait2[3m]) > 100
+      for: 5m
+      labels:
+        grouping_label: "{{ $labels.host }}"
+        type: netstat
+        severity: warning
+      annotations:
+        summary: "Number of connections: {{ $value }}."
+        resolved_summary: "Status ok."
+
+    

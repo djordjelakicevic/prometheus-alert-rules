@@ -1,0 +1,151 @@
+groups:
+  - name: clickhouse-keeper
+    rules:
+
+      # ---------------------------------------------------------------------
+      # Availability
+      # ---------------------------------------------------------------------
+      - alert: ClickHouse Keeper server is down
+        expr: up{job=~"chkeeper-dev|chkeeper-prod"} == 0
+        for: 30s
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} of job {{ $labels.job }} is down"
+          resolved_summary: "Instance is up."
+          dashboard: "grafana_dashboard_url"
+
+      # ---------------------------------------------------------------------
+      # Quorum / leadership
+      # ---------------------------------------------------------------------
+      - alert: ClickHouse Keeper has no leader
+        expr: sum by (job) (ClickHouseAsyncMetrics_KeeperIsLeader{job=~"chkeeper-dev|chkeeper-prod"}) == 0
+        for: 1m
+        labels:
+          grouping_label: '{{ $labels.job }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: "Keeper cluster {{ $labels.job }} has no leader."
+          resolved_summary: "Leader elected, cluster recovered."
+
+      - alert: ClickHouse Keeper split-brain
+        expr: sum by (job) (ClickHouseAsyncMetrics_KeeperIsLeader{job=~"chkeeper-dev|chkeeper-prod"}) > 1
+        for: 1m
+        labels:
+          grouping_label: '{{ $labels.job }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: 'Keeper cluster {{ $labels.job }} reports {{ printf "%.0f" $value }} leaders — split-brain suspected'
+          resolved_summary: "Exactly one leader is present."
+
+      - alert: ClickHouse Keeper quorum degraded
+        expr: sum by (job) (ClickHouseAsyncMetrics_KeeperIsLeader{job=~"chkeeper-dev|chkeeper-prod"} + ClickHouseAsyncMetrics_KeeperIsFollower{job=~"chkeeper-dev|chkeeper-prod"}) < 2
+        for: 1m
+        labels:
+          grouping_label: '{{ $labels.job }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: 'Keeper cluster {{ $labels.job }} has only {{ printf "%.0f" $value }} quorum members — one more failure loses quorum'
+          resolved_summary: "Quorum members restored."
+
+      - alert: ClickHouse Keeper follower not in sync
+        expr: max by (job) (ClickHouseAsyncMetrics_KeeperFollowers{job=~"chkeeper-dev|chkeeper-prod"}) > max by (job) (ClickHouseAsyncMetrics_KeeperSyncedFollowers{job=~"chkeeper-dev|chkeeper-prod"})
+        for: 5m
+        labels:
+          grouping_label: '{{ $labels.job }}'
+          type: chkeeper
+          severity: warning
+        annotations:
+          summary: "Keeper cluster {{ $labels.job }} has a follower not in sync with the leader"
+          resolved_summary: "All followers are in sync."
+
+      # ---------------------------------------------------------------------
+      # Raft health
+      # ---------------------------------------------------------------------
+      - alert: ClickHouse Keeper commits failing
+        expr: sum by (instance) (rate(ClickHouseProfileEvents_KeeperCommitsFailed{job=~"chkeeper-dev|chkeeper-prod"}[5m])) > 0
+        for: 2m
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: "Keeper commits are failing on {{ $labels.instance }}"
+          resolved_summary: "Commits succeeding again."
+
+      - alert: ClickHouse Keeper snapshot failures
+        expr: sum by (instance) (rate(ClickHouseProfileEvents_KeeperSnapshotCreationsFailed{job=~"chkeeper-dev|chkeeper-prod"}[10m]) + rate(ClickHouseProfileEvents_KeeperSnapshotApplysFailed{job=~"chkeeper-dev|chkeeper-prod"}[10m])) > 0
+        for: 5m
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: "Keeper snapshot creation or apply failed on {{ $labels.instance }} — recovery capability compromised"
+          resolved_summary: "Snapshots succeeding."
+
+      # ---------------------------------------------------------------------
+      # Resource exhaustion
+      # ---------------------------------------------------------------------
+      - alert: ClickHouse Keeper rejecting requests (memory)
+        expr: sum by (instance) (rate(ClickHouseProfileEvents_KeeperRequestRejectedDueToSoftMemoryLimitCount{job=~"chkeeper-dev|chkeeper-prod"}[5m])) > 0
+        for: 2m
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: "Keeper on {{ $labels.instance }} is rejecting requests — memory soft limit exceeded"
+          resolved_summary: "No more requests being rejected."
+
+      - alert: ClickHouse Keeper memory soft limit hit
+        expr: ClickHouseAsyncMetrics_KeeperIsExceedingMemorySoftLimitHit{job=~"chkeeper-dev|chkeeper-prod"} == 1
+        for: 5m
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: warning
+        annotations:
+          summary: "Keeper on {{ $labels.instance }} is exceeding memory soft limit"
+          resolved_summary: "Memory usage below soft limit."
+
+      - alert: ClickHouse Keeper rejecting TCP connections
+        expr: sum by (instance) (rate(ClickHouseAsyncMetrics_KeeperTCPRejectedConnections{job=~"chkeeper-dev|chkeeper-prod"}[5m])) > 0
+        for: 2m
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: critical
+        annotations:
+          summary: "Keeper on {{ $labels.instance }} is rejecting TCP connections"
+          resolved_summary: "No more connections being rejected."
+
+      - alert: ClickHouse Keeper file descriptor usage high
+        expr: (ClickHouseAsyncMetrics_KeeperOpenFileDescriptorCount{job=~"chkeeper-dev|chkeeper-prod"} / ClickHouseAsyncMetrics_KeeperMaxFileDescriptorCount{job=~"chkeeper-dev|chkeeper-prod"}) > 0.8
+        for: 10m
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: warning
+        annotations:
+          summary: 'Keeper on {{ $labels.instance }} is at {{ printf "%.0f" $value }}% of its file descriptor limit'
+          resolved_summary: "File descriptor usage below 80%."
+
+      # ---------------------------------------------------------------------
+      # Disk health
+      # ---------------------------------------------------------------------
+      - alert: ClickHouse Keeper fsync latency high
+        expr: (rate(ClickHouseProfileEvents_FileSyncElapsedMicroseconds{job=~"chkeeper-dev|chkeeper-prod"}[5m]) / clamp_min(rate(ClickHouseProfileEvents_FileSync{job=~"chkeeper-dev|chkeeper-prod"}[5m]), 1)) > 100000
+        for: 5m
+        labels:
+          grouping_label: '{{ $labels.instance }}'
+          type: chkeeper
+          severity: warning
+        annotations:
+          summary: 'Keeper fsync on {{ $labels.instance }} averaging over 100ms'
+          resolved_summary: "fsync latency back to normal."

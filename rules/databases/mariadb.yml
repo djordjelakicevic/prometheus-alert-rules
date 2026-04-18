@@ -1,0 +1,150 @@
+groups:
+  - name: mariadb_galera_alerts
+
+    rules:
+
+      - alert: MariaDBExporterDown
+        expr: up{job=~"mariadb-prod|mariadb-dev"} == 0
+        for: 20s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "MariaDBExporter down on {{ $labels.instance }}"
+          resolved_summary: "MariaDBExporter is back up on {{ $labels.instance }}."
+          dashboard: "grafana_dashboard_url"
+
+      # MySQL/MariaDB down
+      - alert: MariaDBDown
+        expr: mysql_up == 0
+        for: 20s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "MariaDB down on {{ $labels.instance }}"
+          description: "MariaDB is not responding on {{ $labels.instance }}"
+          resolved_summary: "MariaDB is back up on {{ $labels.instance }}."
+
+      # Galera cluster not ready
+      - alert: GaleraClusterNotReady
+        expr: mysql_global_status_wsrep_ready != 1
+        for: 20s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "Galera node not ready on {{ $labels.instance }}"
+          description: "Node {{ $labels.instance }} is not ready to serve queries"
+          resolved_summary: "Galera node is ready on {{ $labels.instance }}."
+
+      # Node not in cluster
+      - alert: GaleraNodeNotInCluster
+        expr: mysql_global_status_wsrep_cluster_status != 1
+        for: 20s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "Galera node disconnected from cluster"
+          description: "Node {{ $labels.instance }} is not part of the primary cluster"
+          resolved_summary: "Galera node {{ $labels.instance }} rejoined the cluster."
+
+      # Cluster size too small
+      - alert: GaleraClusterSizeTooSmall
+        expr: mysql_global_status_wsrep_cluster_size < 3
+        for: 20s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "Galera cluster has fewer than 3 nodes"
+          description: "Cluster size is {{ $value }} (expected 3)"
+          resolved_summary: "Galera cluster size is back to expected count."
+
+      # Node not synced
+      - alert: GaleraNodeNotSynced
+        expr: mysql_global_status_wsrep_local_state != 4
+        for: 5m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "Galera node not synced on {{ $labels.instance }}"
+          description: "Node state is {{ $value }} (4=Synced, 2=Donor, 3=Joined, 1=Joining)"
+          resolved_summary: "Galera node {{ $labels.instance }} is synced."
+
+      # Too many connections
+      - alert: MariaDBTooManyConnections
+        expr: |
+          mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.8
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: mariadb
+        annotations:
+          summary: "MariaDB connections close to limit on {{ $labels.instance }}"
+          description: "Using {{ $value | humanizePercentage }} of max connections"
+          resolved_summary: "MariaDB connection count is back to normal on {{ $labels.instance }}."
+
+      # Flow control active (cluster write performance degraded)
+      - alert: GaleraFlowControlActive
+        expr: rate(mysql_global_status_wsrep_flow_control_paused[5m]) > 0.05
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "Galera flow control active on {{ $labels.instance }}"
+          description: "Cluster writes paused {{ $value | humanizePercentage }} of the time - severe performance issue"
+          resolved_summary: "Galera flow control resolved on {{ $labels.instance }}."
+
+      # Too many aborted connections
+      - alert: MariaDBHighAbortedConnections
+        expr: rate(mysql_global_status_aborted_connects[5m]) > 10
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "High connection abort rate on {{ $labels.instance }}"
+          description: "{{ $value }} connection aborts/sec - possible attack or misconfiguration"
+          resolved_summary: "Connection abort rate is back to normal on {{ $labels.instance }}."
+
+      # InnoDB buffer pool too small (swap/disk thrashing)
+      - alert: MariaDBInnoDBBufferPoolLow
+        expr: |
+          rate(mysql_global_status_innodb_buffer_pool_reads[5m]) /
+          (rate(mysql_global_status_innodb_buffer_pool_reads[5m]) +
+          rate(mysql_global_status_innodb_buffer_pool_read_requests[5m])) > 0.2
+        for: 5m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: mariadb
+        annotations:
+          summary: "High InnoDB disk reads on {{ $labels.instance }}"
+          description: "{{ $value | humanizePercentage }} reads from disk - buffer pool too small"
+          resolved_summary: "InnoDB buffer pool hit rate is back to normal on {{ $labels.instance }}."
+
+      # Deadlocks
+      - alert: MariaDBHighDeadlocks
+        expr: rate(mysql_global_status_innodb_deadlocks[5m]) > 1
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: mariadb
+        annotations:
+          summary: "High deadlock rate on {{ $labels.instance }}"
+          description: "{{ $value }} deadlocks/sec"
+          resolved_summary: "Deadlock rate is back to normal on {{ $labels.instance }}."

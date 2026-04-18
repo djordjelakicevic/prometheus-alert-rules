@@ -1,0 +1,84 @@
+groups:
+  - name: patroni-alerts
+    rules:
+
+      - alert: PatroniDown
+        expr: up{job=~"patroni-prod|patroni-dev"} == 0
+        for: 0m
+        labels:
+          grouping_label: "{{ $labels.name }}"
+          severity: critical
+          type: patroni
+        annotations:
+          summary: "Patroni down on instance {{ $labels.instance }}. Job: {{ $labels.job }}"
+          resolved_summary: "Patroni is back up on instance {{ $labels.instance }}."
+          dashboard: "grafana_dashboard_url"
+
+      - alert: PatroniPostgresDown
+        expr: patroni_postgres_running == 0
+        for: 0m
+        labels:
+          grouping_label: "{{ $labels.name }}"
+          severity: critical
+          type: patroni
+        annotations:
+          summary: "Patroni reports that Postgre is down on instance {{ $labels.instance }}. Job: {{ $labels.job }}"
+          resolved_summary: "Postgre is running again."
+
+      - alert: PatroniNoPrimaryNode
+        expr: count by (env) (patroni_primary == 0) == 2
+        for: 0m
+        labels:
+          grouping_label: "{{ $labels.env }}"
+          severity: critical
+          type: patroni
+        annotations:
+          summary: "Patroni has no primary node on {{ $labels.env }}"
+          resolved_summary: "Patroni have primary node again."
+
+      - alert: PatroniMultiplePrimaryNodes
+        expr: count by (env) (patroni_primary == 1) > 1
+        for: 0m
+        labels:
+          grouping_label: "{{ $labels.env }}"
+          severity: critical
+          type: patroni
+        annotations:
+          summary: "Patroni has multiple primary nodes on {{ $labels.env }}"
+          resolved_summary: "Patroni have one primary node again."
+
+      # PostgreSQL crashed
+      - alert: PatroniPostgreSQLCrashed
+        expr: patroni_postgres_state == 14
+        for: 0m
+        labels:
+          severity: critical
+          type: patroni
+          grouping_label: "{{ $labels.name }}"
+        annotations:
+          summary: "PostgreSQL crashed on {{ $labels.name }}"
+          description: "PostgreSQL is in crashed state on {{ $labels.name }}"
+
+      # PostgreSQL start failed
+      - alert: PatroniPostgreSQLStartFailed
+        expr: patroni_postgres_state == 8
+        for: 0m
+        labels:
+          grouping_label: "{{ $labels.name }}"
+          severity: critical
+          type: patroni
+        annotations:
+          summary: "PostgreSQL start failed on {{ $labels.name }}"
+          description: "PostgreSQL failed to start on {{ $labels.name }}"
+
+      # Failsafe mode active
+      - alert: PatroniFailsafeModeActive
+        expr: patroni_failsafe_mode_is_active == 1
+        for: 2m
+        labels:
+          grouping_label: "{{ $labels.name }}"
+          severity: critical
+          type: patroni
+        annotations:
+          summary: "Patroni failsafe mode active on {{ $labels.name }}"
+          description: "Failsafe mode indicates serious cluster problems"

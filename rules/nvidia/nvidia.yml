@@ -1,0 +1,62 @@
+groups:
+  - name: nvidia alerts
+    rules:
+# Metrics collected via telegraf plugin
+# GPU Temperature
+      - alert: GPU Temp
+        expr: last_over_time(nvidia_smi_temperature_gpu[3m]) > 75
+        for: 2m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+        annotations:
+          summary: "GPU {{ $labels.name }} temperature high {{ $value }} °C."
+          resolved_summary: "GPU {{ $labels.name }} temperature is back to normal."
+          description: "GPU {{ $labels.name }} temperature is {{ $value }} °C, exceeding 75 °C threshold."
+
+      # Memory exhaustion
+      # - alert: GPUMemoryExhausted
+      #   expr: (nvidia_smi_memory_used / nvidia_smi_memory_total) * 100 > 90
+      #   for: 2m
+      #   labels:
+      #     grouping_label: "{{ $labels.instance }}"
+      #     severity: critical
+      #   annotations:
+      #     summary: "GPU {{ $labels.name }} memory exhausted."
+      #     resolved_summary: "GPU {{ $labels.name }} memory usage is back to normal."
+      #     description: "GPU {{ $labels.name }} memory usage at {{ $value | humanize }}%."
+
+      # Hardware errors - memory problems
+      - alert: GPUMemoryErrors
+        expr: increase(nvidia_smi_retired_pages_double_bit[5m]) > 0
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+        annotations:
+          summary: "GPU {{ $labels.name }} has uncorrectable memory errors."
+          resolved_summary: "GPU {{ $labels.name }} memory errors are no longer increasing."
+          description: "GPU {{ $labels.name }} has uncorrectable memory errors - hardware failure imminent, requires RMA."
+
+      # PCIe link degradation (T4 should be Gen3 x16)
+      - alert: GPUPCIeLinkDegraded
+        expr: nvidia_smi_pcie_link_width_current < 16
+        for: 2m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+        annotations:
+          summary: "GPU {{ $labels.name }} PCIe link degraded."
+          resolved_summary: "GPU {{ $labels.name }} PCIe link width is back to normal."
+          description: "GPU {{ $labels.name }} link width is x{{ $value }} (expected: x16)."
+
+      # Power anomaly - T4 TDP is 70W
+      - alert: GPUPowerAnomaly
+        expr: nvidia_smi_power_draw > 80
+        for: 2m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+        annotations:
+          summary: "GPU {{ $labels.name }} excessive power draw."
+          resolved_summary: "GPU {{ $labels.name }} power draw is back to normal."
+          description: "GPU {{ $labels.name }} power draw: {{ $value }}W (normal: <70W)."

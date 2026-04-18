@@ -1,0 +1,150 @@
+groups:
+  - name: postgre-alerts
+    rules:
+
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 0m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: postgre
+        annotations:
+          summary: "PostgreSQL down (instance {{ $labels.instance }}). Job: {{ $labels.job }}"
+          resolved_summary: "PostgreSQL is back up (instance {{ $labels.instance }})."
+          dashboard: "grafana_dashboard_url"
+
+      - alert: PostgreSQLExporterDown
+        expr: up{job=~"postgres-prod|postgres-dev"} == 0
+        for: 30s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: postgre
+        annotations:
+          summary: "PostgreSQL Exporter is down (instance {{ $labels.instance }}). Job: {{ $labels.job }}"
+          resolved_summary: "PostgreSQL Exporter is back up (instance {{ $labels.instance }})."
+
+      - alert: PostgreSQLExporterError
+        expr: pg_exporter_last_scrape_error > 0
+        for: 20s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: postgre
+        annotations:
+          summary: PostgreSQL exporter error (instance {{ $labels.instance }})
+          description: "PostgreSQL exporter is reporting errors."
+          resolved_summary: "PostgreSQL exporter errors resolved (instance {{ $labels.instance }})."
+
+      - alert: PostgreSQLTooManyConnections
+        expr: sum by (instance, job, server, env) (pg_stat_activity_count) > min by (instance, job, server, env) (pg_settings_max_connections * 0.8)
+        for: 2m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: postgre
+        annotations:
+          summary: PostgreSQL too many connections (instance {{ $labels.instance }})
+          description: "PostgreSQL instance has too many connections (> 80%).\nNumber of con = {{ printf \"%.0f\" $value }}"
+          resolved_summary: "PostgreSQL connection count is back to normal (instance {{ $labels.instance }})."
+
+      - alert: PostgreSQLDeadLocks
+        expr: increase(pg_stat_database_deadlocks[1m]) > 0
+        for: 30s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: postgre
+        annotations:
+          summary: "PostgreSQL has dead locks (instance {{ $labels.instance }}). Dat name: {{ $labels.datname }}. Value: {{ printf \"%.1f\" $value }}"
+          resolved_summary: "PostgreSQL deadlocks resolved (instance {{ $labels.instance }})."
+
+      - alert: PostgreSQLUnusedReplicationSlot
+        expr: (pg_replication_slots_active == 0) and (pg_replication_is_replica == 0)
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: postgre
+        annotations:
+          summary: PostgreSQL unused replication slot (instance {{ $labels.instance }})
+          description: "Unused Replication Slots."
+          resolved_summary: "Replication slot is now active (instance {{ $labels.instance }})."
+
+      - alert: PostgreSQLDatabaseSizeCritical
+        expr: pg_database_size_bytes / 1024 / 1024 / 1024 > 200
+        for: 2m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: postgre
+        annotations:
+          summary: "Database {{ $labels.datname }} is critically large"
+          description: "Database {{ $labels.datname }} size is {{ printf \"%.1f\" $value }} GB."
+          resolved_summary: "Database {{ $labels.datname }} size is back below threshold."
+
+      - alert: PostgreSQLNoTransactions
+        expr: rate(pg_stat_database_xact_commit[5m]) < 0.1 and pg_stat_database_numbackends > 0
+        for: 1m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: postgre
+        annotations:
+          summary: "No transactions on {{ $labels.datname }}"
+          description: "Database {{ $labels.datname }} has connections but zero transactions. Check alert if it is active."
+          resolved_summary: "Transactions resumed on {{ $labels.datname }}."
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag_seconds > 5
+        for: 30s
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: warning
+          type: postgre
+        annotations:
+          summary: PostgreSQL replication lag (instance {{ $labels.instance }})
+          description: "The PostgreSQL replication lag is high (> 5s)\n  VALUE = {{ printf \"%.1f\" $value }}s"
+          resolved_summary: "PostgreSQL replication lag is back to normal (instance {{ $labels.instance }})."
+
+      - alert: PostgreSQLNoPrimary
+        expr: count by (env) (pg_replication_is_replica == 1) == 2
+        for: 1m
+        labels:
+          grouping_label: "PostgreSQL Cluster"
+          severity: critical
+          type: postgre
+        annotations:
+          summary: "No primary node in PostgreSQL cluster"
+          description: "Patroni cluster has no primary node"
+          resolved_summary: "Primary node is available in PostgreSQL cluster."
+
+      - alert: PostgreSQLSplitBrain
+        expr: count by (env) (pg_replication_is_replica == 0) > 1
+        for: 30s
+        labels:
+          grouping_label: "PostgreSQL Cluster"
+          severity: critical
+          type: postgre
+        annotations:
+          summary: "Multiple primary nodes detected"
+          description: "{{ printf \"%.0f\" $value }} primary nodes detected - split brain"
+          resolved_summary: "Split brain resolved, single primary node restored."
+      
+      - alert: PostgreSQLTablesNotVaccumed
+        expr: |
+          timestamp(
+            pg_stat_user_tables_n_dead_tup >
+              pg_stat_user_tables_n_live_tup * pg_settings_autovacuum_vacuum_scale_factor
+              + pg_settings_autovacuum_vacuum_threshold
+          ) < time() - 36000
+        for: 30m
+        labels:
+          grouping_label: "{{ $labels.instance }}"
+          severity: critical
+          type: postgre
+        annotations:
+          summary: "PostgreSQL tables not vacuumed"
+          description: "{{ $labels.instance }} tables have not been vacuumed recently within the last 10 hours, which may lead to performance degradation. Check this alert if it is active."
+          resolved_summary: "PostgreSQL tables vacuumed."

@@ -1,0 +1,79 @@
+groups: 
+  - name: network rules
+    rules:
+# Mikrotik and Arista related, collecting metrics via telegraf snmp plugin
+# FCS Errors
+    - alert: FCS Errors
+      expr: increase(snmp_interfaces_fcs_errors_total[30s]) > 0 
+      for: 30s
+      labels:
+        grouping_label: "{{ $labels.hostname }}"
+        if_name: "{{ $labels.if_name }}"
+        type: fcs
+        severity: warning
+      annotations:
+        summary: "{{ $labels.if_name }} FCS Errors increasing: {{ printf \"%.2f\" $value }}."
+        resolved_summary: "{{ $labels.if_name }} has no FCS errors."
+        
+# Network Traffic
+    - alert: Network Traffic IN
+      expr: rate(snmp_interfaces_bytes_in_total[1m]) * 8 / 1000000 > 300
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.hostname }}({{ $labels.agent_host }})"
+        if_name: "{{ $labels.if_name }}"
+        type: bandwith
+        severity: warning
+      annotations:
+        summary: "{{ $labels.if_name }}({{ $labels.if_alias }}) - IN: {{ printf \"%.1f\" $value }} Mbps."
+        resolved_summary: "{{ $labels.if_name }} bandwith OK."
+        
+# Network Traffic
+    - alert: Network Traffic OUT
+      expr: rate(snmp_interfaces_bytes_out_total[1m]) * 8 / 1000000 > 300
+      for: 1m
+      labels:
+        grouping_label: "{{ $labels.hostname }}({{ $labels.agent_host }})"
+        if_name: "{{ $labels.if_name }}"
+        type: bandwith
+        severity: warning
+      annotations:
+        summary: "{{ $labels.if_name }}({{ $labels.if_alias }}) - OUT: {{ printf \"%.1f\" $value }} Mbps."
+        resolved_summary: "{{ $labels.if_name }} bandwith OK."
+        
+# SFP Module Power
+    - alert: SFP Module Tx
+      expr: last_over_time(snmp_sfp_tx_power[3m]) / 1000 < -12
+      for: 20s
+      labels:
+        grouping_label: "{{ $labels.hostname }}({{ $labels.agent_host }})"
+        if_name: "{{ $labels.if_name }}"
+        type: bandwith
+        severity: warning
+      annotations:
+        summary: "{{ $labels.if_name }} module power is outside of normal operating range. TX-Power: {{ printf \"%.2f\" $value }} dbm."
+        resolved_summary: "{{ $labels.if_name }} module power is within normal operating range."
+        
+# SFP Module Power
+    - alert: SFP Module Rx
+      expr: last_over_time(snmp_sfp_rx_power[3m]) / 1000 < -12
+      for: 20s
+      labels:
+        grouping_label: "{{ $labels.hostname }}({{ $labels.agent_host }})"
+        if_name: "{{ $labels.if_name }}"
+        type: bandwith
+        severity: warning
+      annotations:
+        summary: "{{ $labels.if_name }} module power is outside of normal operating range. RX-Power: {{ printf \"%.2f\" $value }} dbm."
+        resolved_summary: "{{ $labels.if_name }} module power is within normal operating range."
+
+# Cpu Usage Alert
+    - alert: CPU Usage
+      expr: last_over_time(snmp_cpu_load[3m]) > 80
+      for: 2m
+      labels:
+        grouping_label: "{{ $labels.hostname }}"
+        severity: critical
+      annotations:
+        summary: "High CPU usage: {{ printf \"%.1f\" $value }}%."
+        resolved_summary: "CPU usage is ok."
